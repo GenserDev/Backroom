@@ -16,15 +16,12 @@ impl TextureManager {
         self.textures.insert(name, texture);
     }
     
-    pub fn get_texture(&self, name: &str) -> Option<&Texture2D> {
-        self.textures.get(name)
-    }
 }
 
 pub async fn load_textures() -> TextureManager {
     let mut texture_manager = TextureManager::new();
     
-    // Generar texturas proceduralmente (en un proyecto real cargarías archivos)
+    // Generar texturas  
     let wall_texture = generate_wall_texture();
     texture_manager.add_texture("wall".to_string(), wall_texture);
     
@@ -52,10 +49,10 @@ fn generate_wall_texture() -> Texture2D {
             let base_color = 180;
             let variation = ((x + y) % 8) as u8 * 5;
             
-            pixels[idx] = base_color - variation;     // R
-            pixels[idx + 1] = base_color - variation; // G
-            pixels[idx + 2] = 100 - variation / 2;    // B (menos azul)
-            pixels[idx + 3] = 255;                    // A
+            pixels[idx] = base_color - variation;     
+            pixels[idx + 1] = base_color - variation; 
+            pixels[idx + 2] = 100 - variation / 2;    
+            pixels[idx + 3] = 255;                    
         }
     }
     
@@ -118,10 +115,10 @@ fn generate_exit_texture() -> Texture2D {
             // Crear textura verde brillante para la salida
             let brightness = if (x + y) % 10 < 5 { 200 } else { 150 };
             
-            pixels[idx] = 40;        // R
-            pixels[idx + 1] = brightness; // G
-            pixels[idx + 2] = 40;    // B
-            pixels[idx + 3] = 255;   // A
+            pixels[idx] = 40;        
+            pixels[idx + 1] = brightness; 
+            pixels[idx + 2] = 40;    
+            pixels[idx + 3] = 255;   
         }
     }
     
@@ -147,10 +144,10 @@ fn generate_floor_texture() -> Texture2D {
             let base = if pattern == 0 { 60 } else { 50 };
             let variation = ((x + y) % 4) as u8 * 2;
             
-            pixels[idx] = base + variation;     // R
-            pixels[idx + 1] = base + variation; // G
-            pixels[idx + 2] = 30 + variation;   // B
-            pixels[idx + 3] = 255;              // A
+            pixels[idx] = base + variation;     
+            pixels[idx + 1] = base + variation; 
+            pixels[idx + 2] = 30 + variation;   
+            pixels[idx + 3] = 255;              
         }
     }
     

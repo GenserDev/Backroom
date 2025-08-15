@@ -17,7 +17,7 @@ impl Player {
             x,
             y,
             angle,
-            speed: 3.0,
+            speed: 2.0,
             turn_speed: 2.0,
             last_mouse_x: 0.0,
             was_moving: false,
@@ -25,7 +25,7 @@ impl Player {
         }
     }
     
-    pub fn update(&mut self, dt: f32, world_map: &[[u8; 20]; 15]) {
+    pub fn update(&mut self, dt: f32, world_map: &[[u8; 20]; 15]) { 
         self.was_moving = self.moving;
         self.moving = false;
         
@@ -73,9 +73,8 @@ impl Player {
         let mouse_delta = mouse_x - self.last_mouse_x;
         
         if mouse_delta.abs() > 0.5 {
-            self.angle += mouse_delta * 0.003; // Sensibilidad del mouse
+            self.angle += mouse_delta * 0.001; 
             
-            // Mantener el ángulo en el rango 0-2π
             if self.angle < 0.0 {
                 self.angle += std::f32::consts::PI * 2.0;
             } else if self.angle >= std::f32::consts::PI * 2.0 {
@@ -94,16 +93,16 @@ impl Player {
         }
     }
     
+    //Coliciones
     fn move_with_collision(&mut self, dx: f32, dy: f32, world_map: &[[u8; 20]; 15]) {
         let collision_padding = 0.2;
         
-        // Intentar moverse en X
+
         let new_x = self.x + dx;
         if self.can_move_to(new_x, self.y, collision_padding, world_map) {
             self.x = new_x;
         }
         
-        // Intentar moverse en Y
         let new_y = self.y + dy;
         if self.can_move_to(self.x, new_y, collision_padding, world_map) {
             self.y = new_y;
@@ -111,7 +110,6 @@ impl Player {
     }
     
     fn can_move_to(&self, x: f32, y: f32, padding: f32, world_map: &[[u8; 20]; 15]) -> bool {
-        // Verificar las cuatro esquinas del jugador
         let corners = [
             (x - padding, y - padding),
             (x + padding, y - padding),
@@ -123,14 +121,14 @@ impl Player {
             let map_x = *corner_x as usize;
             let map_y = *corner_y as usize;
             
-            // Verificar límites del mapa
+            // Verificar límites del mapa (20x15)
             if map_y >= world_map.len() || map_x >= world_map[0].len() {
                 return false;
             }
             
             // Verificar colisión con paredes (pero permitir salida)
             let cell = world_map[map_y][map_x];
-            if cell == 1 || cell == 2 { // Paredes normales y con sangre
+            if cell == 1 || cell == 2 {
                 return false;
             }
         }
@@ -138,7 +136,4 @@ impl Player {
         true
     }
     
-    pub fn is_moving(&self) -> bool {
-        self.moving && !self.was_moving
-    }
 }

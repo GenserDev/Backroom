@@ -6,3 +6,7 @@ edition = "2021"
 [dependencies]
 macroquad = { version = "0.4.14", features = ["audio"] }
 rand = "0.8.5"
+
+[[bin]]
+name = "backrooms_game"
+path = "src/main.rs"

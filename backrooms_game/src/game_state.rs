@@ -9,7 +9,7 @@ pub enum Screen {
 
 pub struct GameState {
     pub current_screen: Screen,
-    pub world_map: [[u8; 20]; 15],
+    pub world_map: [[u8; 20]; 15], // Corregido: 20 columnas, 15 filas
     pub escaped: bool,
     pub victory_sound_played: bool,
 }
@@ -18,7 +18,7 @@ impl GameState {
     pub fn new() -> Self {
         let mut game_state = Self {
             current_screen: Screen::Menu,
-            world_map: [[0; 20]; 15],
+            world_map: [[0; 20]; 15], // Corregido
             escaped: false,
             victory_sound_played: false,
         };
@@ -62,7 +62,7 @@ impl GameState {
     fn carve_maze(&mut self, rng: &mut impl Rng) {
         // Algoritmo simple de generación de laberinto
         let mut stack = Vec::new();
-        let mut visited = [[false; 20]; 15];
+        let mut visited = [[false; 20]; 15]; // Corregido
         
         let start_x = 1;
         let start_y = 1;
@@ -92,9 +92,9 @@ impl GameState {
         }
         
         // Crear algunos pasillos adicionales para hacer el laberinto más interesante
-        for _ in 0..15 {
-            let x = rng.gen_range(1..19);
-            let y = rng.gen_range(1..14);
+        for _ in 0..10 { // Reducido para mapas más pequeños
+            let x = rng.gen_range(1..19); // Ajustado para 20 columnas
+            let y = rng.gen_range(1..14); // Ajustado para 15 filas
             if x % 2 == 1 && y % 2 == 1 {
                 self.world_map[y][x] = 0;
                 
@@ -123,7 +123,7 @@ impl GameState {
             let new_x = x as i32 + dx;
             let new_y = y as i32 + dy;
             
-            if new_x >= 1 && new_x < 19 && new_y >= 1 && new_y < 14 {
+            if new_x >= 1 && new_x < 19 && new_y >= 1 && new_y < 14 { // Ajustado
                 let nx = new_x as usize;
                 let ny = new_y as usize;
                 
@@ -138,8 +138,8 @@ impl GameState {
     
     fn add_bloody_walls(&mut self, rng: &mut impl Rng) {
         // Convertir algunas paredes normales en paredes con sangre
-        for y in 0..15 {
-            for x in 0..20 {
+        for y in 0..15 { // Ajustado
+            for x in 0..20 { // Ajustado
                 if self.world_map[y][x] == 1 && rng.gen_bool(0.15) {
                     // Solo agregar sangre si hay al menos un espacio vacío adyacente
                     let adjacent_empty = [
@@ -148,7 +148,7 @@ impl GameState {
                         (x, y.wrapping_sub(1)),
                         (x, y + 1),
                     ].iter().any(|&(ax, ay)| {
-                        ax < 20 && ay < 15 && self.world_map[ay][ax] == 0
+                        ax < 20 && ay < 15 && self.world_map[ay][ax] == 0 // Ajustado
                     });
                     
                     if adjacent_empty {
@@ -160,16 +160,16 @@ impl GameState {
     }
     
     fn place_exit(&mut self, rng: &mut impl Rng) {
-        // Encontrar posiciones vacías lejos del inicio
+        // Encontrar posiciones vacías lejas del inicio
         let mut far_positions = Vec::new();
         let start_x = 1.5;
         let start_y = 1.5;
         
-        for y in 1..14 {
-            for x in 1..19 {
+        for y in 1..14 { // Ajustado
+            for x in 1..19 { // Ajustado
                 if self.world_map[y][x] == 0 {
                     let distance = ((x as f32 - start_x).powi(2) + (y as f32 - start_y).powi(2)).sqrt();
-                    if distance > 8.0 {
+                    if distance > 6.0 { // Reducido para mapas más pequeños
                         far_positions.push((x, y));
                     }
                 }
@@ -181,7 +181,7 @@ impl GameState {
             self.world_map[exit_y][exit_x] = 3; // Salida
         } else {
             // Fallback: colocar en una esquina
-            self.world_map[13][18] = 3;
+            self.world_map[13][18] = 3; // Ajustado
         }
     }
 }

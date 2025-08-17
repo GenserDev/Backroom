@@ -17,15 +17,15 @@ impl Player {
             x,
             y,
             angle,
-            speed: 2.0,
-            turn_speed: 2.0,
+            speed: 3.0, 
+            turn_speed: 2.5,
             last_mouse_x: 0.0,
             was_moving: false,
             moving: false,
         }
     }
     
-    pub fn update(&mut self, dt: f32, world_map: &[[u8; 20]; 15]) { 
+    pub fn update(&mut self, dt: f32, world_map: &[[u8; 40]; 30]) { 
         self.was_moving = self.moving;
         self.moving = false;
         
@@ -93,23 +93,23 @@ impl Player {
         }
     }
     
-    //Coliciones
-    fn move_with_collision(&mut self, dx: f32, dy: f32, world_map: &[[u8; 20]; 15]) {
+    fn move_with_collision(&mut self, dx: f32, dy: f32, world_map: &[[u8; 40]; 30]) {
         let collision_padding = 0.2;
         
-
+        // Probar movimiento en X
         let new_x = self.x + dx;
         if self.can_move_to(new_x, self.y, collision_padding, world_map) {
             self.x = new_x;
         }
         
+        // Probar movimiento en Y
         let new_y = self.y + dy;
         if self.can_move_to(self.x, new_y, collision_padding, world_map) {
             self.y = new_y;
         }
     }
     
-    fn can_move_to(&self, x: f32, y: f32, padding: f32, world_map: &[[u8; 20]; 15]) -> bool {
+    fn can_move_to(&self, x: f32, y: f32, padding: f32, world_map: &[[u8; 40]; 30]) -> bool {
         let corners = [
             (x - padding, y - padding),
             (x + padding, y - padding),
@@ -121,7 +121,7 @@ impl Player {
             let map_x = *corner_x as usize;
             let map_y = *corner_y as usize;
             
-            // Verificar límites del mapa (20x15)
+            // Verificar límites del mapa (40x30)
             if map_y >= world_map.len() || map_x >= world_map[0].len() {
                 return false;
             }
@@ -135,5 +135,4 @@ impl Player {
         
         true
     }
-    
 }

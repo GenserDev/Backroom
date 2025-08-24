@@ -12,11 +12,13 @@ mod player;
 mod textures;
 mod game_state;
 mod minimap;
+mod enemy;
 
 use player::Player;
 use textures::{load_textures, TextureManager};
 use game_state::{GameState, Screen};
 use minimap::Minimap;
+use enemy::Enemy;
 
 const SCREEN_WIDTH: f32 = 800.0;
 const SCREEN_HEIGHT: f32 = 600.0;
@@ -29,13 +31,19 @@ async fn main() {
     let sounds = load_sounds().await;
     let screamer_texture = load_screamer_texture().await;
     let screamer2_texture = load_screamer2_texture().await; 
+    let screamer3_texture = load_screamer3_texture().await; 
     let mut game_state = GameState::new();
     let mut player = Player::new(2.5, 2.5, 0.0);
+    let mut enemy = Enemy::new();
     let minimap = Minimap::new();
+    
+    // Cargar textura del enemigo
+    enemy.load_texture().await;
     
     let mut background_music_playing = false;
     let mut gameplay_music_playing = false; 
-    let mut footstep_playing = false; 
+    let mut footstep_playing = false;
+    let mut enemy_sound_playing = false;
     
     // Configurar el mouse para captura relativa
     set_cursor_grab(false);
@@ -49,21 +57,8 @@ async fn main() {
                 set_cursor_grab(false);
                 show_mouse(true);
                 
-                // Detener audio de pasos si está reproduciéndose
-                if footstep_playing {
-                    if let Some(footstep) = sounds.get("footstep") {
-                        stop_sound(footstep);
-                    }
-                    footstep_playing = false;
-                }
-                
-                // Detener música de gameplay si está reproduciéndose
-                if gameplay_music_playing {
-                    if let Some(gameplay_sound) = sounds.get("gameplay_sound") {
-                        stop_sound(gameplay_sound);
-                    }
-                    gameplay_music_playing = false;
-                }
+                // Detener todos los sonidos cuando estamos en el menú
+                stop_all_game_sounds(&sounds, &mut footstep_playing, &mut enemy_sound_playing, &mut gameplay_music_playing);
                 
                 // Reproducir música de fondo en el menú
                 if !background_music_playing {
@@ -111,48 +106,89 @@ async fn main() {
                 }
                 
                 if game_state.escaped {
-                    // Detener audio de pasos al ganar
-                    if footstep_playing {
-                        if let Some(footstep) = sounds.get("footstep") {
-                            stop_sound(footstep);
-                        }
-                        footstep_playing = false;
-                    }
-                    
-                    // Detener música de gameplay al ganar
-                    if gameplay_music_playing {
-                        if let Some(gameplay_sound) = sounds.get("gameplay_sound") {
-                            stop_sound(gameplay_sound);
-                        }
-                        gameplay_music_playing = false;
-                    }
+                    // Detener todos los sonidos al ganar
+                    stop_all_game_sounds(&sounds, &mut footstep_playing, &mut enemy_sound_playing, &mut gameplay_music_playing);
                     
                     handle_victory(&mut game_state, &sounds).await;
                     draw_victory();
                 } else {
-                    // Actualizar el timer del screamer
+                    // Actualizar el estado del juego
                     game_state.update(dt);
                     
-                    update_game(
-                        &mut player, 
-                        &mut game_state, 
-                        &sounds, 
-                        &mut footstep_playing
-                    ).await;
-                    
-                    draw_game(&player, &game_state, &texture_manager, &minimap);
-                    
-                    // Dibujar screamers si están activos
-                    if game_state.screamer_active {
-                        draw_screamer(&screamer_texture);
-                    } else if game_state.random_screamer_active {
-                        draw_screamer2(&screamer2_texture); 
+                    if !game_state.game_over {
+                        // Actualizar juego normal
+                        update_game(
+                            &mut player, 
+                            &mut enemy,
+                            &mut game_state, 
+                            &sounds, 
+                            &mut footstep_playing,
+                            &mut enemy_sound_playing
+                        ).await;
+                        
+                        draw_game(&player, &enemy, &game_state, &texture_manager, &minimap);
+                        
+                        // Dibujar screamers si están activos
+                        if game_state.screamer_active {
+                            draw_screamer(&screamer_texture);
+                        } else if game_state.random_screamer_active {
+                            draw_screamer2(&screamer2_texture); 
+                        } else if game_state.death_screamer_active {
+                            draw_death_screamer(&screamer3_texture);
+                        }
+                    } else {
+                        // Mostrar screamer de muerte o game over
+                        if game_state.death_screamer_active {
+                            draw_death_screamer(&screamer3_texture);
+                        }
                     }
                 }
+            }
+            Screen::GameOver => {
+                set_cursor_grab(false);
+                show_mouse(true);
+                
+                // Detener todos los sonidos durante game over
+                stop_all_game_sounds(&sounds, &mut footstep_playing, &mut enemy_sound_playing, &mut gameplay_music_playing);
+                
+                // Manejar input para regresar al menú
+                if is_key_pressed(KeyCode::Space) {
+                    game_state.reset();
+                }
+                
+                draw_game_over_with_input();
             }
         }
         
         next_frame().await;
+    }
+}
+
+fn stop_all_game_sounds(
+    sounds: &HashMap<&str, Sound>,
+    footstep_playing: &mut bool,
+    enemy_sound_playing: &mut bool,
+    gameplay_music_playing: &mut bool
+) {
+    if *footstep_playing {
+        if let Some(footstep) = sounds.get("footstep") {
+            stop_sound(footstep);
+        }
+        *footstep_playing = false;
+    }
+    
+    if *enemy_sound_playing {
+        if let Some(enemy_bg) = sounds.get("enemigoBackground") {
+            stop_sound(enemy_bg);
+        }
+        *enemy_sound_playing = false;
+    }
+    
+    if *gameplay_music_playing {
+        if let Some(gameplay_sound) = sounds.get("gameplay_sound") {
+            stop_sound(gameplay_sound);
+        }
+        *gameplay_music_playing = false;
     }
 }
 
@@ -175,6 +211,7 @@ async fn load_screamer_texture() -> Option<Texture2D> {
         "../scream.png",
         "assets/images/scream.png",
         "./assets/images/scream.png",
+        "assets/scream.png",
     ];
     
     for alt_path in alternative_paths {
@@ -214,6 +251,7 @@ async fn load_screamer2_texture() -> Option<Texture2D> {
         "../screamer2.png",
         "assets/screamer2.png",
         "./assets/screamer2.png",
+        "assets/images/screamer2.png",
     ];
     
     for alt_path in alternative_paths {
@@ -232,6 +270,83 @@ async fn load_screamer2_texture() -> Option<Texture2D> {
     println!("  ✗ No se pudo encontrar screamer2.png en ninguna ubicación");
     println!("  → Se usará un screamer2 generado por código");
     None
+}
+
+async fn load_screamer3_texture() -> Option<Texture2D> {
+    println!("Intentando cargar imagen del screamer3 (muerte)...");
+    
+    if std::path::Path::new("scream3.png").exists() {
+        match load_texture("scream3.png").await {
+            Ok(texture) => {
+                println!("✓ Imagen screamer3 cargada: scream3.png");
+                return Some(texture);
+            }
+            Err(e) => println!("✗ Error cargando scream3.png: {}", e),
+        }
+    }
+    
+    // Intentar rutas alternativas
+    let alternative_paths = vec![
+        "./scream3.png",
+        "../scream3.png",
+        "assets/scream3.png",
+        "./assets/scream3.png",
+        "assets/images/scream3.png",
+    ];
+    
+    for alt_path in alternative_paths {
+        if std::path::Path::new(&alt_path).exists() {
+            println!("  → Intentando ruta alternativa: {}", alt_path);
+            match load_texture(&alt_path).await {
+                Ok(texture) => {
+                    println!("  ✓ Imagen screamer3 cargada desde ruta alternativa: {}", alt_path);
+                    return Some(texture);
+                }
+                Err(e) => println!("  ✗ Error en ruta alternativa {}: {}", alt_path, e),
+            }
+        }
+    }
+    
+    println!("  ✗ No se pudo encontrar scream3.png en ninguna ubicación");
+    println!("  → Se usará un screamer3 generado por código");
+    None
+}
+
+fn draw_game_over_with_input() {
+    clear_background(Color::from_rgba(20, 0, 0, 255));
+    
+    let game_over_text = "GAME OVER";
+    let game_over_size = 50.0;
+    let game_over_width = measure_text(game_over_text, None, game_over_size as u16, 1.0).width;
+    draw_text(
+        game_over_text,
+        (SCREEN_WIDTH - game_over_width) / 2.0,
+        250.0,
+        game_over_size,
+        Color::from_rgba(255, 100, 100, 255),
+    );
+    
+    let message = "You were caught by the entity...";
+    let message_size = 22.0;
+    let message_width = measure_text(message, None, message_size as u16, 1.0).width;
+    draw_text(
+        message,
+        (SCREEN_WIDTH - message_width) / 2.0,
+        320.0,
+        message_size,
+        WHITE,
+    );
+    
+    let instruction = "Press SPACE to return to menu";
+    let instruction_size = 18.0;
+    let instruction_width = measure_text(instruction, None, instruction_size as u16, 1.0).width;
+    draw_text(
+        instruction,
+        (SCREEN_WIDTH - instruction_width) / 2.0,
+        370.0,
+        instruction_size,
+        Color::from_rgba(200, 200, 200, 255),
+    );
 }
 
 fn draw_screamer(screamer_texture: &Option<Texture2D>) {
@@ -292,6 +407,42 @@ fn draw_screamer2(screamer2_texture: &Option<Texture2D>) {
     } else {
         // Screamer2 generado por código si no hay imagen
         draw_screamer2_generated();
+    }
+}
+
+fn draw_death_screamer(screamer3_texture: &Option<Texture2D>) {
+    // Fondo negro intenso con pulso rojo
+    let pulse = (get_time() * 12.0).sin() * 0.4 + 0.6;
+    draw_rectangle(0.0, 0.0, SCREEN_WIDTH, SCREEN_HEIGHT, 
+        Color::from_rgba((100.0 * pulse) as u8, 0, 0, 230));
+    
+    if let Some(texture) = screamer3_texture {
+        // Efecto de vibración más intenso para el screamer de muerte
+        let shake_x = (get_time() * 80.0).sin() * 8.0;
+        let shake_y = (get_time() * 65.0).cos() * 6.0;
+        
+        let scale = 1.0; // Más grande que los otros
+        let texture_width = texture.width() * scale;
+        let texture_height = texture.height() * scale;
+        let x = (SCREEN_WIDTH - texture_width) as f32 / 2.0 + shake_x as f32;
+        let y = (SCREEN_HEIGHT - texture_height) as f32 / 2.0 + shake_y as f32;
+        
+        // Efecto de parpadeo
+        let alpha = if (get_time() * 15.0).sin() > 0.0 { 255 } else { 200 };
+        
+        draw_texture_ex(
+            texture,
+            x,
+            y,
+            Color::from_rgba(255, 255, 255, alpha),
+            DrawTextureParams {
+                dest_size: Some(vec2(texture_width, texture_height)),
+                ..Default::default()
+            },
+        );
+    } else {
+        // Screamer3 generado por código si no hay imagen
+        draw_death_screamer_generated();
     }
 }
 
@@ -412,22 +563,93 @@ fn draw_screamer2_generated() {
     );
 }
 
+fn draw_death_screamer_generated() {
+    // Screamer de muerte - el más intenso y aterrador
+    let center_x = SCREEN_WIDTH / 2.0;
+    let center_y = SCREEN_HEIGHT / 2.0;
+    
+    // Vibración más intensa
+    let shake_x = (get_time() * 80.0).sin() * 8.0;
+    let shake_y = (get_time() * 65.0).cos() * 6.0;
+    let face_x = center_x + shake_x as f32;
+    let face_y = center_y + shake_y as f32;
+    
+    // Cara demoníaca
+    draw_ellipse(face_x, face_y, 200.0, 220.0, 0.0, Color::from_rgba(80, 60, 50, 255));
+    
+    // Ojos enormes y terroríficos
+    draw_circle(face_x - 60.0, face_y - 40.0, 35.0, Color::from_rgba(255, 0, 0, 255));
+    draw_circle(face_x + 60.0, face_y - 40.0, 35.0, Color::from_rgba(255, 0, 0, 255));
+    
+    // Pupilas que se mueven
+    let pupil_offset_x = (get_time() * 3.0).sin() * 5.0;
+    let pupil_offset_y = (get_time() * 2.0).cos() * 3.0;
+    draw_circle(face_x - 60.0 + pupil_offset_x as f32, face_y - 40.0 + pupil_offset_y as f32, 12.0, BLACK);
+    draw_circle(face_x + 60.0 - pupil_offset_x as f32, face_y - 40.0 + pupil_offset_y as f32, 12.0, BLACK);
+    
+    // Boca gigante abierta
+    draw_ellipse(face_x, face_y + 60.0, 120.0, 100.0, 0.0, Color::from_rgba(20, 0, 0, 255));
+    
+    // Dientes afilados e irregulares
+    for i in 0..8 {
+        let tooth_x = face_x - 50.0 + (i as f32 * 12.0);
+        let tooth_height = 15.0 + (i as f32 * 3.0).sin() * 10.0;
+        draw_poly(
+            tooth_x, face_y + 20.0,
+            3,
+            8.0,
+            0.0,
+            Color::from_rgba(250, 250, 230, 255)
+        );
+        draw_rectangle(tooth_x - 3.0, face_y + 20.0, 6.0, tooth_height, 
+            Color::from_rgba(250, 250, 230, 255));
+    }
+    
+    // Sangre abundante - CORREGIDO: convertir f64 a f32
+    for i in 0..12 {
+        let drop_x = face_x - 80.0 + (i as f32 * 13.0);
+        let drop_y = face_y + 120.0 + (i as f32 * 8.0) + ((get_time() * 2.0 + i as f64).sin() * 10.0) as f32;
+        draw_circle(drop_x, drop_y, 4.0, Color::from_rgba(150, 0, 0, 255));
+        draw_rectangle(drop_x - 2.0, face_y + 80.0, 4.0, 
+            drop_y - face_y - 80.0, Color::from_rgba(150, 0, 0, 255));
+    }
+    
+    // Texto de muerte parpadeante
+    let death_text = "YOU DIED";
+    let text_size = 60.0;
+    let text_width = measure_text(death_text, None, text_size as u16, 1.0).width;
+    
+    // Parpadeo intenso
+    let alpha = if (get_time() * 15.0).sin() > 0.0 { 255 } else { 100 };
+    
+    let text_x = (SCREEN_WIDTH - text_width) as f32 / 2.0 + shake_x as f32;
+    let text_y = center_y + 200.0 + shake_y as f32;
+    
+    draw_text(
+        death_text,
+        text_x,
+        text_y,
+        text_size,
+        Color::from_rgba(255, 0, 0, alpha),
+    );
+}
+
 async fn load_sounds() -> HashMap<&'static str, Sound> {
     let mut sounds = HashMap::new();
     
     println!("Intentando cargar sonidos...");
     println!("Directorio de trabajo actual: {:?}", std::env::current_dir());
     
-    // Audios a cargar (incluyendo ambos screamers)
+    // Audios a cargar (incluyendo los nuevos sonidos del enemigo)
     let sound_files = vec![
         ("footstep", "/assets/sounds/footstep.wav"),
         ("scream", "/assets/sounds/scream.wav"),
         ("screamer2", "/assets/sounds/screamer2.wav"), 
+        ("scream3", "/assets/sounds/scream3.wav"), 
+        ("enemigoBackground", "/assets/sounds/enemigoBackground.wav"), 
         ("background", "/assets/sounds/background.wav"),
         ("gameplay_sound", "/assets/sounds/gameplay_sound.wav"),
         ("victory", "/assets/sounds/victory.wav"),
-        ("scream", "/assets/sounds/scream.wav"),
-        ("scream2", "/assets/sounds/screamer2.wav"),
     ];
     
     for (name, path) in sound_files {
@@ -442,9 +664,10 @@ async fn load_sounds() -> HashMap<&'static str, Sound> {
         } else {
             println!("✗ Archivo no encontrado: {}", path);
             let alternative_paths = vec![
-                format!("./{}", path),
-                format!("../{}", path),
-                path.replace("assets/", "./assets/"),
+                format!("./{}", path.trim_start_matches('/')),
+                format!("../{}", path.trim_start_matches('/')),
+                path.replace("/assets/", "./assets/"),
+                path.replace("/assets/", "assets/"),
             ];
             
             let mut found = false;
@@ -469,13 +692,13 @@ async fn load_sounds() -> HashMap<&'static str, Sound> {
         }
     }
     
-    println!("Sonidos cargados: {}/{}", sounds.len(), 6);
+    println!("Sonidos cargados: {}/{}", sounds.len(), 8);
     sounds
 }
 
 async fn handle_menu(game_state: &mut GameState) {
     if is_key_pressed(KeyCode::Space) || is_key_pressed(KeyCode::Enter) {
-        game_state.current_screen = Screen::Game;
+        game_state.start_game();
     }
 }
 
@@ -526,17 +749,95 @@ fn draw_menu(_texture_manager: &TextureManager) {
         controls_size,
         GRAY,
     );
+    
+    let warning = "⚠️ WARNING: Contains jump scares and horror elements";
+    let warning_size = 16.0;
+    let warning_width = measure_text(warning, None, warning_size as u16, 1.0).width;
+    draw_text(
+        warning,
+        (SCREEN_WIDTH - warning_width) / 2.0,
+        500.0,
+        warning_size,
+        Color::from_rgba(255, 100, 100, 200),
+    );
 }
 
 async fn update_game(
     player: &mut Player, 
+    enemy: &mut Enemy,
     game_state: &mut GameState, 
     sounds: &HashMap<&str, Sound>,
-    footstep_playing: &mut bool
+    footstep_playing: &mut bool,
+    enemy_sound_playing: &mut bool
 ) {
     let dt = get_frame_time();
 
     player.update(dt, &game_state.world_map);
+
+    // Activar enemigo si es momento
+    if game_state.enemy_should_activate && !enemy.active {
+        enemy.activate(player, &game_state.world_map);
+    }
+
+    // Actualizar enemigo
+    if enemy.active {
+        enemy.update(dt, player, &game_state.world_map);
+        
+        // Verificar si el enemigo atrapó al jugador
+        if enemy.check_player_collision(player) && !game_state.game_over {
+            game_state.trigger_death();
+            
+            // Reproducir sonido del screamer de muerte
+            if !game_state.death_screamer_sound_played {
+                if let Some(death_scream) = sounds.get("scream3") {
+                    play_sound_once(death_scream);
+                    println!("¡ENEMIGO TE ATRAPÓ! SCREAMER DE MUERTE ACTIVADO!");
+                }
+                game_state.death_screamer_sound_played = true;
+            }
+            
+            // Detener sonidos del enemigo
+            if *enemy_sound_playing {
+                if let Some(enemy_bg) = sounds.get("enemigoBackground") {
+                    stop_sound(enemy_bg);
+                }
+                *enemy_sound_playing = false;
+            }
+            
+            enemy.deactivate();
+            return;
+        }
+        
+        // Controlar sonido del enemigo basado en distancia
+        let distance_to_player = enemy.get_distance_to_player(player);
+        if distance_to_player < 15.0 { // Solo reproducir si está relativamente cerca
+            if let Some(enemy_bg) = sounds.get("enemigoBackground") {
+                // Calcular volumen basado en distancia
+                let volume = (1.0 - (distance_to_player / 15.0)).max(0.1).min(0.8);
+                
+                if !*enemy_sound_playing {
+                    play_sound(
+                        enemy_bg,
+                        PlaySoundParams {
+                            looped: true,
+                            volume,
+                        },
+                    );
+                    *enemy_sound_playing = true;
+                    println!("Sonido de enemigo iniciado (distancia: {:.1})", distance_to_player);
+                }
+       
+            }
+        } else {
+            // Detener sonido si está muy lejos
+            if *enemy_sound_playing {
+                if let Some(enemy_bg) = sounds.get("enemigoBackground") {
+                    stop_sound(enemy_bg);
+                }
+                *enemy_sound_playing = false;
+            }
+        }
+    }
 
     // Verificar si el screamer de salida debe activarse
     if game_state.check_screamer_distance(player.x, player.y) {
@@ -550,12 +851,13 @@ async fn update_game(
     // Verificar si el screamer aleatorio debe activarse
     if game_state.check_random_screamer() {
         // Reproducir sonido del screamer2
-        if let Some(scream2_sound) = sounds.get("scream2") {
+        if let Some(scream2_sound) = sounds.get("screamer2") {
             play_sound_once(scream2_sound);
             println!("¡SCREAMER ALEATORIO ACTIVADO!");
         }
     }
 
+    // Control de pasos
     if let Some(footstep) = sounds.get("footstep") {
         if player.moving && !*footstep_playing {
             play_sound(
@@ -566,11 +868,9 @@ async fn update_game(
                 },
             );
             *footstep_playing = true;
-            println!("Iniciando audio de pasos en loop");
         } else if !player.moving && *footstep_playing {
             stop_sound(footstep);
             *footstep_playing = false;
-            println!("Deteniendo audio de pasos");
         }
     }
     
@@ -583,17 +883,60 @@ async fn update_game(
     }
 }
 
-fn draw_game(player: &Player, game_state: &GameState, texture_manager: &TextureManager, minimap: &Minimap) {
+fn draw_game(player: &Player, enemy: &Enemy, game_state: &GameState, texture_manager: &TextureManager, minimap: &Minimap) {
     clear_background(Color::from_rgba(20, 20, 10, 255));
     
     // Raycasting
     render_world(player, game_state, texture_manager);
     
-    // Minimapa
-    minimap.draw(player, &game_state.world_map);
+    // Renderizar enemigo en el mundo 3D con oclusión
+    enemy.render_in_world(player, SCREEN_WIDTH, SCREEN_HEIGHT, &game_state.world_map);
+    
+    // Minimapa - CORREGIDO: usar método draw en lugar de draw_with_enemy
+    minimap.draw_with_enemy(player, enemy, &game_state.world_map);
     
     // HUD
     draw_hud();
+    
+    // Indicador de peligro si el enemigo está cerca
+    if enemy.active {
+        let distance = enemy.get_distance_to_player(player);
+        if distance < 5.0 {
+            draw_danger_indicator(distance);
+        }
+    }
+}
+
+fn draw_danger_indicator(distance: f32) {
+    // Indicador de peligro que se intensifica cuando el enemigo está cerca
+    let intensity = (5.0 - distance) / 5.0;
+    let alpha = (intensity * 100.0) as u8;
+    
+    // Borde rojo pulsante - CORREGIDO: convertir f64 a f32
+    let pulse = (get_time() * 8.0).sin() as f32 * 0.3 + 0.7;
+    draw_rectangle_lines(
+        0.0, 0.0, 
+        SCREEN_WIDTH, SCREEN_HEIGHT, 
+        5.0, 
+        Color::from_rgba((255.0 * pulse * intensity) as u8, 0, 0, alpha),
+    );
+    
+    // Texto de advertencia
+    if distance < 2.0 {
+        let warning = "DANGER!";
+        let text_size = 30.0;
+        let text_width = measure_text(warning, None, text_size as u16, 1.0).width;
+        
+        let text_alpha = ((get_time() * 10.0).sin() as f32 * 0.5 + 0.5 * 255.0) as u8;
+        
+        draw_text(
+            warning,
+            (SCREEN_WIDTH - text_width) / 2.0,
+            50.0,
+            text_size,
+            Color::from_rgba(255, 50, 50, text_alpha),
+        );
+    }
 }
 
 fn render_world(player: &Player, game_state: &GameState, _texture_manager: &TextureManager) {

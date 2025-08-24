@@ -5,6 +5,7 @@ use rand::{Rng, seq::SliceRandom};
 pub enum Screen {
     Menu,
     Game,
+    GameOver,
 }
 
 pub struct GameState {
@@ -16,12 +17,21 @@ pub struct GameState {
     pub screamer_timer: f32,
     pub screamer_active: bool,
     pub exit_position: (usize, usize),
-    // Nuevos campos para el screamer aleatorio
+    // Campos para el screamer aleatorio
     pub random_screamer_triggered: bool,
     pub random_screamer_active: bool,
     pub random_screamer_timer: f32,
     pub random_screamer_cooldown: f32,
     pub game_timer: f32,
+    // Nuevos campos para Game Over
+    pub game_over: bool,
+    pub game_over_timer: f32,
+    pub death_screamer_active: bool,
+    pub death_screamer_timer: f32,
+    pub death_screamer_sound_played: bool,
+    // Campo para controlar cuando activar el enemigo
+    pub enemy_activation_timer: f32,
+    pub enemy_should_activate: bool,
 }
 
 impl GameState {
@@ -40,6 +50,13 @@ impl GameState {
             random_screamer_timer: 0.0,
             random_screamer_cooldown: 0.0,
             game_timer: 0.0,
+            game_over: false,
+            game_over_timer: 0.0,
+            death_screamer_active: false,
+            death_screamer_timer: 0.0,
+            death_screamer_sound_played: false,
+            enemy_activation_timer: 0.0,
+            enemy_should_activate: false,
         };
         
         game_state.generate_world();
@@ -58,17 +75,56 @@ impl GameState {
         self.random_screamer_timer = 0.0;
         self.random_screamer_cooldown = 0.0;
         self.game_timer = 0.0;
+        self.game_over = false;
+        self.game_over_timer = 0.0;
+        self.death_screamer_active = false;
+        self.death_screamer_timer = 0.0;
+        self.death_screamer_sound_played = false;
+        self.enemy_activation_timer = 0.0;
+        self.enemy_should_activate = false;
         self.generate_world();
     }
     
+    pub fn start_game(&mut self) {
+        self.current_screen = Screen::Game;
+        self.enemy_activation_timer = 0.0;
+        self.enemy_should_activate = false;
+    }
+    
+    pub fn trigger_death(&mut self) {
+        self.game_over = true;
+        self.death_screamer_active = true;
+        self.death_screamer_timer = 0.0;
+        self.death_screamer_sound_played = false;
+    }
+    
     pub fn update(&mut self, dt: f32) {
-        self.game_timer += dt;
-        
-        // Actualizar screamer de salida
-        self.update_screamer(dt);
-        
-        // Actualizar screamer aleatorio
-        self.update_random_screamer(dt);
+        match self.current_screen {
+            Screen::Game => {
+                if !self.game_over {
+                    self.game_timer += dt;
+                    
+                    // Timer para activar el enemigo después de unos segundos
+                    self.enemy_activation_timer += dt;
+                    if self.enemy_activation_timer >= 10.0 && !self.enemy_should_activate {
+                        self.enemy_should_activate = true;
+                        println!("¡Enemigo activado después de 10 segundos!");
+                    }
+                    
+                    // Actualizar screamer de salida
+                    self.update_screamer(dt);
+                    
+                    // Actualizar screamer aleatorio
+                    self.update_random_screamer(dt);
+                } else {
+                    self.update_death_screamer(dt);
+                }
+            },
+            Screen::GameOver => {
+                self.update_game_over(dt);
+            },
+            _ => {}
+        }
     }
     
     pub fn update_screamer(&mut self, dt: f32) {
@@ -99,6 +155,21 @@ impl GameState {
         }
     }
     
+    pub fn update_death_screamer(&mut self, dt: f32) {
+        if self.death_screamer_active {
+            self.death_screamer_timer += dt;
+            if self.death_screamer_timer >= 3.0 {
+                self.death_screamer_active = false;
+                self.current_screen = Screen::GameOver;
+                self.game_over_timer = 0.0;
+            }
+        }
+    }
+    
+    pub fn update_game_over(&mut self, dt: f32) {
+        self.game_over_timer += dt;
+        }
+    
     pub fn check_screamer_distance(&mut self, player_x: f32, player_y: f32) -> bool {
         if !self.screamer_triggered {
             let exit_x = self.exit_position.0 as f32;
@@ -118,7 +189,8 @@ impl GameState {
     pub fn check_random_screamer(&mut self) -> bool {
         // Solo puede activarse si no hay cooldown y no está ya activo
         if self.random_screamer_cooldown <= 0.0 && !self.random_screamer_active && 
-           !self.screamer_active && self.game_timer > 20.0 { // Esperar al menos 20 segundos
+           !self.screamer_active && !self.death_screamer_active && 
+           self.game_timer > 20.0 && !self.game_over { // Esperar al menos 20 segundos
             
             // Probabilidad muy baja por frame (aproximadamente cada 30-60 segundos en promedio)
             let mut rng = rand::thread_rng();
@@ -316,5 +388,4 @@ impl GameState {
             self.world_map[28][37] = 3; // Ajustado para mapa 40x30
             self.exit_position = (37, 28);
         }
-    }
-}
+    }}
